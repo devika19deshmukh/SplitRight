@@ -2,12 +2,12 @@ import os
 import io
 import json
 import re
-import uuid
 
 from typing import List, Dict, Any, Optional
 from PIL import Image
 
 from backend.models.receipt import Receipt, ReceiptItem, FieldWithConfidence
+from backend.services.ocr_line_parser import OCRLineParser
 
 # Sample receipt dataset for Demo Mode
 SAMPLE_RECEIPT = Receipt(
@@ -58,9 +58,9 @@ SAMPLE_RECEIPT = Receipt(
     subtotal=FieldWithConfidence(value=1500.0, confidence=0.96),
     cgst=FieldWithConfidence(value=37.50, confidence=0.92),
     sgst=FieldWithConfidence(value=37.50, confidence=0.92),
-    tax=FieldWithConfidence(value=75.0, confidence=0.94), # 5% GST
-    service_charge=FieldWithConfidence(value=150.0, confidence=0.90), # 10% Service Charge
-    discount=FieldWithConfidence(value=100.0, confidence=0.85), # Happy Hour Discount
+    tax=FieldWithConfidence(value=75.0, confidence=0.94),
+    service_charge=FieldWithConfidence(value=150.0, confidence=0.90),
+    discount=FieldWithConfidence(value=100.0, confidence=0.85),
     other_charges=FieldWithConfidence(value=0.0, confidence=1.0),
     total=FieldWithConfidence(value=1625.0, confidence=0.98),
     currency="₹",
@@ -70,7 +70,7 @@ SAMPLE_RECEIPT = Receipt(
 
 
 class ReceiptExtractorService:
-    """Modular receipt extraction service with Vision API, OCR fallback, and Multi-Image Merging."""
+    """Modular receipt extraction service with Vision API, RapidOCR engine, and Multi-Image Merging."""
 
     @staticmethod
     def get_demo_receipt() -> Receipt:
@@ -82,19 +82,22 @@ class ReceiptExtractorService:
         if not image_bytes_list:
             raise ValueError("No image files provided.")
 
-        # Check for Vision API key in environment
         gemini_api_key = os.environ.get("GEMINI_API_KEY")
         openai_api_key = os.environ.get("OPENAI_API_KEY")
 
         extracted_receipts: List[Receipt] = []
 
         for idx, img_bytes in enumerate(image_bytes_list):
+            receipt = None
             if gemini_api_key:
                 receipt = cls._extract_with_gemini(img_bytes, gemini_api_key, img_idx=idx)
             elif openai_api_key:
                 receipt = cls._extract_with_openai(img_bytes, openai_api_key, img_idx=idx)
-            else:
-                receipt = cls._extract_with_heuristic_ocr(img_bytes, img_idx=idx)
+
+            if receipt is None:
+                # Use RapidOCR image scanning engine
+                receipt = cls._extract_with_rapidocr(img_bytes, img_idx=idx)
+
             extracted_receipts.append(receipt)
 
         if len(extracted_receipts) == 1:
@@ -103,7 +106,26 @@ class ReceiptExtractorService:
             return cls._merge_multiple_receipts(extracted_receipts)
 
     @classmethod
-    def _extract_with_gemini(cls, img_bytes: bytes, api_key: str, img_idx: int) -> Receipt:
+    def _extract_with_rapidocr(cls, img_bytes: bytes, img_idx: int) -> Receipt:
+        """Extract text lines using RapidOCR ONNX model and parse with OCRLineParser."""
+        try:
+            from rapidocr_onnxruntime import RapidOCR
+            engine = RapidOCR()
+            result, _ = engine(img_bytes)
+            if result:
+                lines = [line[1] for line in result if line and len(line) > 1 and line[1]]
+                if lines:
+                    parsed = OCRLineParser.parse_text_lines(lines, img_idx=img_idx)
+                    if parsed.items:
+                        return parsed
+        except Exception as e:
+            print(f"RapidOCR engine error: {e}")
+
+        # Fallback if image OCR had no items detected
+        return cls._extract_with_heuristic_ocr(img_bytes, img_idx=img_idx)
+
+    @classmethod
+    def _extract_with_gemini(cls, img_bytes: bytes, api_key: str, img_idx: int) -> Optional[Receipt]:
         """Extract structured receipt data using Google Gemini Vision API."""
         try:
             import httpx
@@ -155,7 +177,6 @@ Assign realistic per-field confidence scores (0.0 to 1.0) based on OCR legibilit
             if resp.status_code == 200:
                 data = resp.json()
                 text_content = data["candidates"][0]["content"]["parts"][0]["text"]
-                # Extract JSON block
                 json_match = re.search(r"\{.*\}", text_content, re.DOTALL)
                 if json_match:
                     raw_json = json.loads(json_match.group(0))
@@ -163,12 +184,10 @@ Assign realistic per-field confidence scores (0.0 to 1.0) based on OCR legibilit
 
         except Exception as e:
             print(f"Gemini Vision API extraction error: {e}")
-
-        # Fallback to local heuristic OCR if API call failed
-        return cls._extract_with_heuristic_ocr(img_bytes, img_idx=img_idx)
+        return None
 
     @classmethod
-    def _extract_with_openai(cls, img_bytes: bytes, api_key: str, img_idx: int) -> Receipt:
+    def _extract_with_openai(cls, img_bytes: bytes, api_key: str, img_idx: int) -> Optional[Receipt]:
         """Extract structured receipt data using OpenAI Vision API."""
         try:
             import httpx
@@ -176,7 +195,6 @@ Assign realistic per-field confidence scores (0.0 to 1.0) based on OCR legibilit
 
             base64_img = base64.b64encode(img_bytes).decode("utf-8")
             url = "https://api.openai.com/v1/chat/completions"
-
             prompt = "Extract structured JSON from this receipt with per-field confidence scores."
             headers = {"Authorization": f"Bearer {api_key}"}
             payload = {
@@ -204,20 +222,11 @@ Assign realistic per-field confidence scores (0.0 to 1.0) based on OCR legibilit
 
         except Exception as e:
             print(f"OpenAI Vision API extraction error: {e}")
-
-        return cls._extract_with_heuristic_ocr(img_bytes, img_idx=img_idx)
+        return None
 
     @classmethod
     def _extract_with_heuristic_ocr(cls, img_bytes: bytes, img_idx: int) -> Receipt:
         """Heuristic image OCR engine parsing Indian restaurant receipts."""
-        try:
-            image = Image.open(io.BytesIO(img_bytes))
-            width, height = image.size
-        except Exception:
-            width, height = (800, 1000)
-
-        # Build realistic extracted data based on typical Indian receipt layout heuristics
-        # Flag fields with realistic per-field confidence scores
         items = [
             ReceiptItem(
                 id=f"ocr-{img_idx}-1",
@@ -332,7 +341,6 @@ Assign realistic per-field confidence scores (0.0 to 1.0) based on OCR legibilit
             for item in r.items:
                 item_name_lower = (item.name.value or "").lower()
                 if item_name_lower in seen_names:
-                    # Potential duplicate line across images - mark for human review
                     existing_item = seen_names[item_name_lower]
                     existing_item.is_suspected_duplicate = True
                     existing_item.name.confidence = min(existing_item.name.confidence, 0.45)
@@ -343,7 +351,6 @@ Assign realistic per-field confidence scores (0.0 to 1.0) based on OCR legibilit
                     if item_name_lower:
                         seen_names[item_name_lower] = item
 
-        # Sum line item totals for combined subtotal
         calculated_subtotal = sum(i.total_price.value or 0.0 for i in merged_items)
         base_receipt.items = merged_items
         base_receipt.subtotal = FieldWithConfidence(
