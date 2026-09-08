@@ -7,76 +7,71 @@
 
   body {
     font-family: var(--font-sans);
-    background-color: #090d16;
-    color: #f1f5f9;
+    background-color: #080c14;
+    color: #f8fafc;
     min-height: 100vh;
     margin: 0;
     overflow-x: hidden;
     background-image: 
-      radial-gradient(circle at 50% 0%, rgba(99, 102, 241, 0.12) 0%, transparent 50%),
-      radial-gradient(circle at 100% 100%, rgba(168, 85, 247, 0.08) 0%, transparent 40%);
+      radial-gradient(ellipse at 50% -20%, rgba(99, 102, 241, 0.15) 0%, transparent 60%),
+      radial-gradient(circle at 100% 100%, rgba(168, 85, 247, 0.1) 0%, transparent 50%),
+      radial-gradient(circle at 0% 50%, rgba(16, 185, 129, 0.06) 0%, transparent 45%);
     background-attachment: fixed;
   }
 }
 
-/* Custom Bespoke Fintech UI Tokens */
-.fintech-card {
-  background: rgba(15, 23, 42, 0.75);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border: 1px solid rgba(255, 255, 255, 0.07);
-  box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.5);
-  border-radius: 1.25rem;
+/* Premium Glass & UI Tokens */
+.glass-panel {
+  background: rgba(15, 23, 42, 0.7);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.6);
+  border-radius: 1.5rem;
 }
 
-.fintech-card-interactive {
-  background: rgba(15, 23, 42, 0.6);
+.glass-card {
+  background: rgba(30, 41, 59, 0.4);
   backdrop-filter: blur(16px);
   border: 1px solid rgba(255, 255, 255, 0.06);
   transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-  border-radius: 1rem;
+  border-radius: 1.125rem;
 }
 
-.fintech-card-interactive:hover {
-  border-color: rgba(99, 102, 241, 0.35);
+.glass-card:hover {
+  border-color: rgba(99, 102, 241, 0.4);
   transform: translateY(-2px);
-  box-shadow: 0 12px 30px -8px rgba(99, 102, 241, 0.15);
+  box-shadow: 0 16px 32px -8px rgba(99, 102, 241, 0.18);
 }
 
-.glow-gradient-text {
-  background: linear-gradient(135deg, #a5b4fc 0%, #c084fc 40%, #f472b6 100%);
+.gradient-text {
+  background: linear-gradient(135deg, #a5b4fc 0%, #c084fc 50%, #f472b6 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
 }
 
-.btn-emerald {
-  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-  color: white;
-  font-weight: 700;
-  border-radius: 0.875rem;
-  padding: 0.75rem 1.5rem;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  box-shadow: 0 4px 16px rgba(16, 185, 129, 0.3);
+.gradient-text-emerald {
+  background: linear-gradient(135deg, #34d399 0%, #10b981 50%, #065f46 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
 }
 
-.btn-emerald:hover:not(:disabled) {
-  transform: translateY(-1px);
-  box-shadow: 0 6px 24px rgba(16, 185, 129, 0.45);
-}
-
+/* Interactive Buttons */
 .btn-primary {
   background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
   color: white;
   font-weight: 700;
-  border-radius: 0.875rem;
-  padding: 0.75rem 1.5rem;
+  border-radius: 1rem;
+  padding: 0.875rem 1.75rem;
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  box-shadow: 0 4px 16px rgba(99, 102, 241, 0.35);
+  box-shadow: 0 4px 20px rgba(99, 102, 241, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .btn-primary:hover:not(:disabled) {
-  transform: translateY(-1px);
-  box-shadow: 0 6px 24px rgba(99, 102, 241, 0.5);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 28px rgba(99, 102, 241, 0.5);
+  background: linear-gradient(135deg, #4f46e5 0%, #4338ca 100%);
 }
 
 .btn-primary:disabled {
@@ -86,7 +81,23 @@
   box-shadow: none !important;
 }
 
-/* Custom Confidence Badges */
+.btn-emerald {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  color: white;
+  font-weight: 700;
+  border-radius: 1rem;
+  padding: 0.875rem 1.75rem;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 4px 20px rgba(16, 185, 129, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.btn-emerald:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 28px rgba(16, 185, 129, 0.45);
+}
+
+/* Custom Confidence Pill Badges */
 .badge-high {
   background: rgba(16, 185, 129, 0.12);
   color: #34d399;
@@ -103,12 +114,23 @@
   background: rgba(239, 68, 68, 0.15);
   color: #f87171;
   border: 1px solid rgba(239, 68, 68, 0.35);
-  animation: pulse-slow 3s infinite;
+  animation: pulse-slow 2.5s infinite;
 }
 
 @keyframes pulse-slow {
   0%, 100% { opacity: 1; }
-  50% { opacity: 0.75; }
+  50% { opacity: 0.7; }
+}
+
+/* Custom Inputs */
+input[type="text"],
+input[type="number"] {
+  transition: all 0.2s ease;
+}
+
+input[type="text"]:focus,
+input[type="number"]:focus {
+  box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.4);
 }
 
 /* Custom Scrollbar */
@@ -117,7 +139,7 @@
   height: 6px;
 }
 ::-webkit-scrollbar-track {
-  background: #090d16;
+  background: #080c14;
 }
 ::-webkit-scrollbar-thumb {
   background: #1e293b;
