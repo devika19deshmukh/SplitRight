@@ -1,181 +1,552 @@
-# SplitRight — Smart Bill Splitter from Receipt Photos
+# SplitRight 🧾
 
-[![Python 3.14](https://img.shields.io/badge/Python-3.14-blue.svg)](https://python.org)
-[![FastAPI](https://img.shields.io/badge/FastAPI-0.141-green.svg)](https://fastapi.tiangolo.com)
-[![React](https://img.shields.io/badge/React-19.0-61dafb.svg)](https://react.dev)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5.0-3178c6.svg)](https://www.typescriptlang.org)
-[![Tailwind CSS](https://img.shields.io/badge/Tailwind-v4-38bdf8.svg)](https://tailwindcss.com)
+**Smart restaurant bill splitting from receipt photos.**
 
----
+SplitRight is a full-stack web application that extracts structured data from restaurant receipts, lets users verify the extracted bill, assign items to diners, and calculates a fair split with proportional taxes and charges.
 
-## 🌟 Overview & Problem Solved
-
-**SplitRight** is a smart, end-to-end web application designed to solve the common pain points of splitting restaurant bills fairly after dining out with friends:
-
-1. **Unequal Tax/Fee Allocation**: Traditional bill splitters often divide GST and service charges equally among diners, which unfairly penalizes members who only ordered a cheap drink.
-2. **Fragile OCR**: Automated AI receipt scanners can make errors on dim, angled, or faded thermal receipts.
-3. **Rounding Discrepancies**: Floating-point rounding errors often lead to split totals that don't match the original receipt.
-
-### Core Design Philosophy:
-> **"Probabilistic extraction, human verification, deterministic arithmetic."**
-> AI extracts structured data with per-field confidence scores; human users verify and adjust values on the mandatory Review screen; deterministic Python `Decimal` math calculates 100% exact proportional splits.
+> **Probabilistic extraction. Human verification. Deterministic arithmetic.**
 
 ---
 
-## 📐 System Architecture
+## ✨ Why SplitRight?
 
+Splitting a restaurant bill is easy when everyone spends the same amount. Real bills are rarely that simple.
+
+One person may order only a drink while another orders a full meal. Items may be shared, taxes and service charges apply to the whole bill, and rounding can leave the final split a few paise away from the receipt total.
+
+SplitRight is designed around three ideas:
+
+- **Extract** receipt data instead of entering every item manually.
+- **Review** uncertain OCR output before calculations are trusted.
+- **Split fairly** by distributing bill-level charges according to each person's actual item subtotal.
+
+---
+
+## 🚀 Core Features
+
+### 📷 Receipt Extraction
+- Upload one or multiple restaurant receipt images.
+- Extract restaurant name, items, quantity, unit price, item totals and bill-level charges.
+- Supports fields such as **CGST, SGST, tax, service charge and discount**.
+- Stores a confidence score for extracted fields.
+- Supports multi-image receipt merging with duplicate-line warnings.
+
+### 🔍 Human Review & Validation
+OCR is treated as an extraction aid rather than an unquestionable source of truth.
+
+SplitRight can validate:
+- sum of line items vs. receipt subtotal;
+- calculated bill total vs. printed total;
+- small rounding differences using a tolerance.
+
+This makes incorrect or uncertain receipt data visible before the final split.
+
+### 👥 Flexible Item Assignment
+Each receipt item can be assigned to:
+- one person;
+- multiple people equally;
+- multiple people using custom shares.
+
+The backend prevents calculation when receipt items remain unassigned.
+
+### ⚖️ Proportional Charges
+Taxes, service charges, discounts and other bill-level charges are distributed according to each member's share of the item subtotal.
+
+For member `i`:
+
+```text
+ratioᵢ = member item subtotalᵢ / total assigned item subtotal
+
+taxᵢ            = total tax × ratioᵢ
+service chargeᵢ = service charge × ratioᵢ
+discountᵢ       = total discount × ratioᵢ
 ```
-                                  +-----------------------+
-                                  | React + Vite Frontend |
-                                  | (TypeScript + Tailwind)|
-                                  +-----------+-----------+
-                                              |
-                                      REST API (JSON)
-                                              |
-                                  +-----------v-----------+
-                                  | FastAPI Python Backend|
-                                  +-----+-----------+-----+
-                                        |           |
-               +------------------------+           +-----------------------+
-               |                                                            |
-    +----------v-----------+                                     +----------v-----------+
-    | Modular OCR Service  |                                     | Deterministic Engine |
-    | - Vision API         |                                     | - Decimal Math       |
-    | - Multi-Image Merge  |                                     | - Proportional Taxes |
-    | - Per-Field Conf.    |                                     | - Largest Remainder  |
-    | - Demo / Mock Fallback|                                     | - Strict Validation  |
-    +----------------------+                                     +----------------------+
+
+So someone who ordered only 10% of the food receives approximately 10% of the applicable shared charges instead of paying an equal portion.
+
+### 🪙 Exact Paise-Level Reconciliation
+All monetary calculations use Python `Decimal`.
+
+After individual amounts are rounded to ₹0.01, SplitRight performs deterministic rounding reconciliation so that:
+
+```text
+sum(member payable amounts) = confirmed receipt total
+```
+
+For example, splitting ₹10 equally among three people can produce:
+
+```text
+₹3.33 + ₹3.33 + ₹3.34 = ₹10.00
 ```
 
 ---
 
-## 🚀 Key Features & User Flow
+## 🔄 Application Flow
 
-1. **Photo Upload**: Drag and drop single or multiple receipt photos (JPG, PNG, WEBP). Supports long receipts photographed across 2+ images with automatic duplicate line detection.
-2. **Review Screen (Desktop Split View)**: Mandatory review step showing original receipt image side-by-side with editable items and field-level confidence ratings (High `96% ✓`, Medium `75% ⚠️`, Low `45% ❓`).
-3. **Live Arithmetic Bill Mismatch Warning**: Automatically compares printed receipt total vs `subtotal + taxes + service_charge - discount` without silently altering values.
-4. **Member Management**: Add 2 or more diners with color-coded avatar circles.
-5. **Flexible Item Assignment**: Assign dishes to 1 person, multiple people, or everyone with equal split or custom percentage (70/30) controls.
-6. **Proportional Tax & Charge Distribution**:
-   - $\text{Person Food Subtotal } (S_i) = \sum \text{Assigned Item Shares}$
-   - $\text{Proportional Tax } (T_i) = \text{Total Tax} \times \left(\frac{S_i}{S_{\text{total}}}\right)$
-   - $\text{Proportional Service Charge } (SC_i) = \text{Total Service Charge} \times \left(\frac{S_i}{S_{\text{total}}}\right)$
-7. **Largest-Remainder Rounding Reconciliation**: Guarantees $\sum \text{Member Payable} = \text{Confirmed Receipt Total}$ exactly to the paise ($\text{₹}0.01$).
-8. **Final Detailed Breakdown**: Per-member cards displaying itemized shares, subtotal, proportional tax, service charge, discount, total payable, and one-click summary copy button.
+```text
+Receipt Photo(s)
+      │
+      ▼
+OCR / Vision Extraction
+      │
+      ▼
+Structured Receipt + Confidence Scores
+      │
+      ▼
+Review & Arithmetic Validation
+      │
+      ▼
+Add Members
+      │
+      ▼
+Assign Receipt Items
+      │
+      ▼
+Proportional Tax / Charge Distribution
+      │
+      ▼
+Paise-Level Reconciliation
+      │
+      ▼
+Final Member Breakdown
+```
+
+---
+
+## 🏗️ Architecture
+
+```text
+┌──────────────────────────────────────┐
+│          React Frontend              │
+│ React + TypeScript + Vite + Tailwind │
+└──────────────────┬───────────────────┘
+                   │ REST / JSON
+                   ▼
+┌──────────────────────────────────────┐
+│             FastAPI API              │
+├──────────────────┬───────────────────┤
+│ Receipt Routes   │ Split Routes      │
+└────────┬─────────┴────────┬──────────┘
+         │                  │
+         ▼                  ▼
+┌─────────────────┐  ┌────────────────────┐
+│ Receipt Pipeline│  │ Split Calculator   │
+│                 │  │                    │
+│ • Vision APIs   │  │ • Decimal math     │
+│ • RapidOCR      │  │ • Equal/custom     │
+│ • Line parser   │  │ • Proportional fees│
+│ • Multi-image   │  │ • Reconciliation   │
+└────────┬────────┘  └────────────────────┘
+         │
+         ▼
+┌─────────────────┐
+│ Receipt Validator│
+│ • Item subtotal │
+│ • Printed total │
+│ • Warnings      │
+└─────────────────┘
+```
+
+---
+
+## 🧠 OCR Pipeline
+
+SplitRight uses a modular receipt-extraction pipeline.
+
+When configured, the backend can attempt vision-based extraction through:
+
+- **Google Gemini**
+- **OpenAI**
+
+Without those API keys, the project can use its local OCR path based on **RapidOCR**, followed by a heuristic receipt-line parser.
+
+The parser recognizes common receipt patterns such as:
+
+```text
+2 Chicken Biryani 320.00 640.00
+Chicken Biryani 2 640.00
+Chicken Biryani 640.00
+```
+
+It also detects common financial labels including:
+
+```text
+Subtotal
+CGST
+SGST
+GST / Tax / VAT
+Service Charge
+Discount
+Grand Total
+```
+
+Extracted data is converted into validated Pydantic receipt models before it is used by the splitting engine.
+
+> Receipt OCR is inherently imperfect. SplitRight therefore keeps confidence information and supports validation instead of silently assuming every extracted value is correct.
 
 ---
 
 ## 🛠️ Tech Stack
 
-- **Frontend**: React 19, TypeScript, Vite, Tailwind CSS v4, Lucide Icons.
-- **Backend**: Python 3.14, FastAPI, Pydantic v2, Pillow, Uvicorn, Pytest.
-- **Data Handling**: Python `Decimal` for exact monetary arithmetic.
+### Frontend
+- React 19
+- TypeScript
+- Vite
+- Tailwind CSS v4
+- Lucide React
+
+### Backend
+- Python
+- FastAPI
+- Pydantic
+- Uvicorn
+- Pillow
+- RapidOCR / ONNX Runtime
+- Pytest
+
+### Optional Vision Providers
+- Google Gemini
+- OpenAI Vision
+
+### Numerical Accuracy
+- Python `Decimal`
+- ₹0.01 quantization
+- deterministic rounding reconciliation
 
 ---
 
-## ⚙️ Setup & Installation
+## 📁 Project Structure
+
+```text
+splitright/
+│
+├── backend/
+│   ├── models/
+│   │   ├── receipt.py
+│   │   └── split.py
+│   │
+│   ├── routes/
+│   │   ├── receipt.py
+│   │   └── split.py
+│   │
+│   ├── services/
+│   │   ├── ocr_line_parser.py
+│   │   ├── receipt_extractor.py
+│   │   ├── receipt_validator.py
+│   │   └── split_calculator.py
+│   │
+│   ├── tests/
+│   │   ├── test_ocr_parser.py
+│   │   └── test_split_calculator.py
+│   │
+│   └── main.py
+│
+├── frontend/
+│   ├── public/
+│   ├── src/
+│   ├── index.html
+│   └── package.json
+│
+├── test_data/
+│   ├── bill_01/
+│   └── schema.json
+│
+├── evaluate_ocr.py
+├── .env.example
+├── .gitignore
+└── README.md
+```
+
+Generated folders such as `venv/`, `node_modules/`, `dist/`, `.pytest_cache/` and `__pycache__/` should not be committed.
+
+---
+
+## 🔌 API Overview
+
+### Receipt Extraction
+
+```http
+POST /api/receipts/extract
+```
+
+Accepts one or more uploaded receipt images and returns a structured receipt with field confidence information.
+
+### Receipt Validation
+
+```http
+POST /api/receipts/validate
+```
+
+Checks the reviewed receipt for arithmetic inconsistencies.
+
+### Demo Receipt
+
+```http
+GET /api/receipts/demo
+```
+
+Returns a sample receipt for development and testing.
+
+### Calculate Split
+
+```http
+POST /api/split/calculate
+```
+
+Accepts:
+- reviewed receipt;
+- members;
+- item assignments.
+
+Returns a detailed member-by-member breakdown and reconciliation status.
+
+Interactive FastAPI documentation is available while the backend is running at:
+
+```text
+http://localhost:8000/docs
+```
+
+---
+
+## ⚙️ Local Setup
 
 ### Prerequisites
+
+Install:
+
 - Python 3.10+
-- Node.js v18+ & npm
+- Node.js 18+
+- npm
 
-### 1. Backend Setup
-```bash
-# Navigate to project root
-cd splitright
-
-# Activate Python virtual environment (if created)
-.\venv\Scripts\activate   # Windows
-# source venv/bin/activate # macOS/Linux
-
-# Install dependencies
-pip install -r backend/requirements.txt # or install fastapi uvicorn pydantic pillow python-multipart pytest httpx
-```
-
-### 2. Frontend Setup
-```bash
-# Navigate to frontend directory
-cd frontend
-
-# Install dependencies
-npm install
-```
-
----
-
-## 🏃 How to Run the Application
-
-### Option A: Run Backend & Frontend Concurrently
-
-1. **Start Backend Server**:
-   ```bash
-   .\venv\Scripts\python.exe -m uvicorn backend.main:app --reload --port 8000
-   ```
-   FastAPI interactive API docs available at: `http://localhost:8000/docs`
-
-2. **Start Frontend Dev Server**:
-   ```bash
-   cd frontend
-   npm run dev
-   ```
-   Open browser at: `http://localhost:5173`
-
----
-
-## 🧪 Running Automated Tests
-
-The application includes 16 unit test cases covering edge cases such as proportional GST, cheap drink orders, custom 70/30 splits, multi-tax receipts, and decimal rounding reconciliation.
+### 1. Clone the repository
 
 ```bash
-# Run backend pytest suite
-.\venv\Scripts\python.exe -m pytest backend/tests/test_split_calculator.py
+git clone https://github.com/devika19deshmukh/SplitRight.git
+cd SplitRight
 ```
 
-Expected Output:
+### 2. Create a Python environment
+
+Windows:
+
+```bash
+python -m venv venv
+.\venv\Scripts\activate
 ```
-backend/tests/test_split_calculator.py ................ [100%]
-16 passed in 0.12s
+
+macOS/Linux:
+
+```bash
+python3 -m venv venv
+source venv/bin/activate
 ```
 
----
+### 3. Install backend dependencies
 
-## 📊 Ground Truth Evaluation Dataset
+If using the project's requirements file:
 
-To evaluate OCR accuracy on real-world photographed receipts:
+```bash
+pip install -r backend/requirements.txt
+```
 
-1. Place receipt images and ground truth JSON files under `test_data/`:
-   ```
-   test_data/
-     bill_01/
-       image.jpg
-       ground_truth.json
-     bill_02/
-       image.jpg
-       ground_truth.json
-   ```
+### 4. Configure environment variables
 
-2. Run the evaluation script:
-   ```bash
-   .\venv\Scripts\python.exe evaluate_ocr.py
-   ```
+Copy `.env.example` to `.env`.
 
----
-
-## 🔑 Environment Variables (`.env.example`)
-
-```ini
-# Optional Vision API Keys for extraction
+```env
 GEMINI_API_KEY=
 OPENAI_API_KEY=
 
-# Server Configuration
 PORT=8000
 HOST=0.0.0.0
 ```
 
+The vision API keys are optional for the local/demo OCR paths.
+
+### 5. Start the backend
+
+From the project root:
+
+```bash
+python -m uvicorn backend.main:app --reload --port 8000
+```
+
+Backend:
+
+```text
+http://localhost:8000
+```
+
+API docs:
+
+```text
+http://localhost:8000/docs
+```
+
+### 6. Start the frontend
+
+Open another terminal:
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+Then open:
+
+```text
+http://localhost:5173
+```
+
 ---
 
-## ⚠️ Known Limitations
+## 🧪 Testing
 
-- Real vision API features require `GEMINI_API_KEY` or `OPENAI_API_KEY` in environment. Fallback OCR and Demo Mode provide rich receipts for testing when offline.
-- Highly crumpled or blurred handwritten receipts require manual field editing on the Review screen.
+SplitRight includes automated tests for both receipt parsing and bill calculations.
+
+Run all backend tests:
+
+```bash
+python -m pytest backend/tests
+```
+
+The calculation test suite covers cases including:
+
+- one-person assignments;
+- equal shared items;
+- custom 70/30 splits;
+- items shared by everyone;
+- proportional tax;
+- proportional service charge;
+- proportional discounts;
+- decimal rounding;
+- printed-total mismatches;
+- line-item/subtotal mismatches;
+- very different diner subtotals;
+- quantity greater than one;
+- zero service charge;
+- zero tax;
+- CGST + SGST.
+
+A dedicated OCR parser test also checks extraction of restaurant information, items, subtotal, CGST, SGST, service charge and total from receipt-style text.
+
+---
+
+## 📊 OCR Evaluation Dataset
+
+The repository includes a ground-truth schema for receipt evaluation.
+
+Example structure:
+
+```text
+test_data/
+└── bill_01/
+    ├── image.jpg
+    └── ground_truth.json
+```
+
+The schema can represent:
+
+- restaurant name;
+- item name;
+- quantity;
+- unit price;
+- item total;
+- subtotal;
+- tax;
+- CGST;
+- SGST;
+- service charge;
+- discount;
+- other charges;
+- final total.
+
+Run the evaluation utility with:
+
+```bash
+python evaluate_ocr.py
+```
+
+> **Note:** The current evaluation utility is a lightweight scaffold around ground-truth bill fields. It should not be interpreted as a production OCR benchmark or a measured real-world accuracy claim.
+
+---
+
+## 🧮 Example Fair Split
+
+Suppose two diners order:
+
+```text
+A → ₹900 meal
+B → ₹100 drink
+Subtotal → ₹1,000
+Tax → ₹100
+```
+
+Instead of charging ₹50 tax to each person:
+
+```text
+A ratio = 900 / 1000 = 90%
+B ratio = 100 / 1000 = 10%
+
+A tax = ₹90
+B tax = ₹10
+```
+
+Final:
+
+| Member | Items | Tax | Payable |
+|---|---:|---:|---:|
+| A | ₹900 | ₹90 | ₹990 |
+| B | ₹100 | ₹10 | ₹110 |
+| **Total** | **₹1,000** | **₹100** | **₹1,100** |
+
+This is the central fairness principle behind SplitRight.
+
+---
+
+## ⚠️ Current Limitations
+
+- OCR quality depends on receipt image quality and layout.
+- Very blurred, handwritten, folded or heavily damaged receipts may require manual correction.
+- Heuristic parsing cannot reliably understand every restaurant receipt format.
+- External vision extraction requires the corresponding API key.
+- Multi-image duplicate detection is heuristic and should be reviewed by the user.
+- The included OCR evaluation script is an evaluation scaffold rather than a full production benchmark.
+
+---
+
+## 🔐 Security Notes
+
+- API keys belong in `.env`, not frontend code.
+- `.env` and `.env.local` are excluded through `.gitignore`.
+- `.env.example` contains only placeholder configuration.
+- Do not commit real provider credentials to GitHub.
+
+---
+
+## 🎯 Design Principle
+
+SplitRight deliberately separates uncertain extraction from exact financial calculation:
+
+```text
+Receipt image
+     ↓
+Probabilistic OCR
+     ↓
+Human-verifiable structured data
+     ↓
+Deterministic Decimal calculation
+     ↓
+Exactly reconciled bill split
+```
+
+This allows OCR to assist the user without allowing an uncertain extraction result to silently determine how much each person owes.
+
+---
+
+## 👩‍💻 Author
+
+**Devika Deshmukh**
+
+Built as a full-stack project exploring receipt OCR, structured extraction, validation and fair expense splitting.
